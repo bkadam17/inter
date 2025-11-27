@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Digital Clock</title>
+  <style>
+    /* Basic reset */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root{
+      --bg: #0f1724;
+      --card: #0b1220;
+      --muted: #9aa4b2;
+      --accent: #60a5fa;
+      --accent-2: #7c3aed;
+      --glass: rgba(255,255,255,0.04);
+      --radius: 18px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    body{
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #071021 0%, #0b1320 100%);
+      color: #e6eef8;
+      padding: 28px;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius: var(--radius);
+      padding: 28px;
+      width: min(480px, 94vw);
+      box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+      border: 1px solid rgba(255,255,255,0.04);
+      display: grid;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .clock-row{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .time{
+      font-weight: 700;
+      font-size: clamp(36px, 8vw, 64px);
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .seconds{
+      font-size: 0.38em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .ampm{
+      font-size: 0.36em;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.02);
+    }
+
+    .date{
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .controls{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+
+    .btn{
+      appearance: none;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: white;
+      box-shadow: 0 6px 18px rgba(99,102,241,0.12), inset 0 -1px rgba(255,255,255,0.06);
+    }
+
+    .btn.ghost{
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.04);
+      color: var(--muted);
+      box-shadow: none;
+      font-weight: 600;
+      padding: 8px 10px;
+    }
+
+    .small{
+      font-size: 13px;
+      padding: 6px 8px;
+    }
+
+    .footer {
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap:12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* small screens */
+    @media (max-width:420px){
+      .clock-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .controls { width:100%; justify-content: space-between; }
+      .footer { flex-direction: column; align-items: flex-start; gap:8px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="region" aria-label="Digital clock">
+    <div class="clock-row">
+      <div>
+        <div id="time" class="time" aria-live="polite" aria-atomic="true">
+          <!-- populated by JS -->
+          <span id="hours">00:00</span>
+          <span id="seconds" class="seconds">00</span>
+          <span id="ampm" class="ampm" hidden>AM</span>
+        </div>
+        <div id="date" class="date" aria-hidden="false">Loading date…</div>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="toggleFormat" class="btn small" type="button" aria-pressed="false">24-hour</button>
+        <button id="toggleSeconds" class="btn ghost small" type="button" aria-pressed="true">Hide seconds</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>Timezone: <span id="tz">local</span></div>
+      <div style="opacity:.85">Built with JavaScript • Accessible</div>
+    </div>
+  </main>
+
+  <script>
+    // -------------------------
+    // Digital Clock - JavaScript
+    // -------------------------
+    // Features:
+    // - Updates precisely on each second boundary
+    // - 12/24-hour toggle
+    // - Optional seconds display toggle
+    // - Accessible (aria-live) and responsive
+    //
+    // Usage: copy-paste this file and open in a browser.
+
+    (function () {
+      const elHours = document.getElementById('hours');
+      const elSeconds = document.getElementById('seconds');
+      const elAMPM = document.getElementById('ampm');
+      const elDate = document.getElementById('date');
+      const btnFormat = document.getElementById('toggleFormat');
+      const btnSeconds = document.getElementById('toggleSeconds');
+      const tzEl = document.getElementById('tz');
+
+      // State
+      let use24 = true;
+      let showSeconds = false;
+      // Set initial button labels and aria states
+      function refreshButtons() {
+        btnFormat.textContent = use24 ? '24-hour' : '12-hour';
+        btnFormat.setAttribute('aria-pressed', String(!use24));
+        btnSeconds.textContent = showSeconds ? 'Hide seconds' : 'Show seconds';
+        btnSeconds.classList.toggle('ghost', !showSeconds);
+        btnSeconds.setAttribute('aria-pressed', String(showSeconds));
+        elSeconds.style.display = showSeconds ? 'inline-block' : 'none';
+      }
+
+      // Helper: left-pad number to 2 digits
+      function two(n){ return n < 10 ? '0' + n : String(n); }
+
+      // Format date string e.g. Monday, Nov 17, 2025
+      function formatDate(d) {
+        const opts = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+        return new Intl.DateTimeFormat(navigator.language || 'en-US', opts).format(d);
+      }
+
+      // Render time once using given Date object
+      function renderTime(now) {
+        let hours = now.getHours();
+        let minutes = now.getMinutes();
+        let seconds = now.getSeconds();
+
+        // AM/PM handling
+        if (!use24) {
+          elAMPM.hidden = false;
+          const ampm = hours >= 12 ? 'PM' : 'AM';
+          elAMPM.textContent = ampm;
+          hours = hours % 12;
+          if (hours === 0) hours = 12; // 12-hour clock shows 12
+        } else {
+          elAMPM.hidden = true;
+        }
+
+        elHours.textContent = `${two(hours)}:${two(minutes)}`;
+        elSeconds.textContent = two(seconds);
+        elDate.textContent = formatDate(now);
+      }
+
+      // Update loop: recalc timeout so we update exactly on the next second boundary
+      let timerId = null;
+      function startClock() {
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+        // Render now immediately
+        const now = new Date();
+        renderTime(now);
+        // compute ms until next whole second (1000 - ms)
+        const ms = 1000 - now.getMilliseconds();
+        timerId = setTimeout(function tick() {
+          const then = new Date();
+          renderTime(then);
+          // schedule next tick in ~1000ms exactly on second boundary
+          timerId = setTimeout(tick, 1000 - (new Date()).getMilliseconds());
+        }, ms);
+      }
+
+      // Event listeners
+      btnFormat.addEventListener('click', () => {
+        use24 = !use24;
+        refreshButtons();
+        // re-render immediately
+        renderTime(new Date());
+      });
+
+      btnSeconds.addEventListener('click', () => {
+        showSeconds = !showSeconds;
+        refreshButtons();
+      });
+
+      // Show user's time zone name if available
+      (function setTimezoneLabel(){
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+          tzEl.textContent = tz;
+        } catch(e){
+          tzEl.textContent = 'local';
+        }
+      })();
+
+      // Initialize
+      refreshButtons();
+      startClock();
+
+      // Optional: stop when tab is hidden to save power (but update when tab becomes visible)
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          if (timerId) { clearTimeout(timerId); timerId = null; }
+        } else {
+          startClock();
+        }
+      });
+
+      // Expose small API for quick debugging from console (optional)
+      window._digitalClock = {
+        set24: (val) => { use24 = Boolean(val); refreshButtons(); renderTime(new Date()); },
+        toggleSeconds: () => { showSeconds = !showSeconds; refreshButtons(); },
+        now: () => new Date()
+      };
+    })();
+  </script>
+</body>
+</html>
